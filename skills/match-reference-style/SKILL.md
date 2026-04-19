@@ -18,17 +18,28 @@ This is different from `paper-font-format`: there, `figsize` is fixed by the use
 
 ## Inputs to gather
 
-If the user didn't supply them, ask:
+Like `paper-font-format`, start from the submission target, not from column-width numbers.
+
+### Step A — ask for the venue first
+
+Ask: **"What conference or journal are you submitting to?"** Then use `WebSearch` / `WebFetch` to look up the venue's current author guidelines and extract paper size, column layout, column width, and body font size. Show the user what you found (with source URL) and let them confirm or correct.
+
+Prefer primary sources: the venue's author-kit / LaTeX class file / official "for authors" page. Templates change between years, so do not rely on memory — always look up current values.
+
+If venue lookup fails or the user can't name one, fall back to asking directly for `column_width_in` and `body_pt` (default 6.5" / 12 pt for generic single-column A4/Letter).
+
+### Always-required inputs (regardless of venue)
+
+After venue is resolved, also ask for:
 
 1. **Reference script path** and **target script path**.
 2. **Layout relationship** between the two figures in the paper:
    - `side-by-side-same-column` (both fit in one column)
-   - `side-by-side-two-column` (spanning a two-column page)
+   - `side-by-side-two-column` (side-by-side across a two-column page)
    - `stacked` (one above the other)
    - `independent` (just want visual consistency, no shared row/column)
-3. **Column width** `column_width_in` and **body_pt** (same values as `paper-font-format`).
-4. **Reference `embed_ratio`** — what fraction of a column does the reference occupy in the final paper? (This is how you derive the reference's scale.)
-5. **Inter-figure gap** for side-by-side layouts (default **0.15"**).
+3. **Reference `embed_ratio`** — what fraction of a column does the reference occupy in the final paper? (This is how you derive the reference's scale. Common: 0.5 for half-column, 1.0 for full-column, 2.0 for two-column-spanning.)
+4. **Inter-figure gap** for side-by-side layouts (default **0.15"**).
 
 ## Step-by-step procedure
 

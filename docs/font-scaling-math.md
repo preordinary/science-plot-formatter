@@ -59,18 +59,20 @@ Any rendered page pt below **6** is unreadable in print. If the target falls bel
 
 After all lookups and floors: require `title ≥ label ≥ tick`. If `body_pt` is very small (e.g. 7 pt in Nature), the subtractions above can make label or tick zero or negative — the floor handles this but also reorders: clamp upward to preserve the chain.
 
-## Paper format presets
+## Paper format presets (reference only — not the lookup table)
+
+⚠️ **Do not treat this table as authoritative.** Both skills are designed to ask the user for the target venue and then use `WebSearch` / `WebFetch` to retrieve the venue's **current** author guidelines / LaTeX class file. Templates change between years and the values below are a rough sanity check only.
 
 | Format | Column width | Body pt |
 |---|---|---|
 | A4 single-column | 6.5" (~165 mm) | 10–12 |
-| A4 two-column (IEEE/ACM) | 3.35"–3.5" (~85 mm) | 9–10 |
-| Nature single-column | 3.5" (89 mm) | 7 |
-| Nature two-column | 7.2" (183 mm) | 7 |
-| Science single-column | 2.28" (58 mm) | 9 |
+| A4 two-column (IEEE/ACM historical) | 3.35"–3.5" (~85 mm) | 9–10 |
+| Nature single-column (historical) | 3.5" (89 mm) | 7 |
+| Nature two-column (historical) | 7.2" (183 mm) | 7 |
+| Science single-column (historical) | 2.28" (58 mm) | 9 |
 | Letter single-column | 6.5" | 10–12 |
 
-When a user gives just a journal name, pick the matching row above and confirm before formatting.
+When only a venue name is available but a live lookup is impossible (offline, venue not found), fall back to this table and **tell the user** which row you used and that it may be out of date.
 
 ## Line and marker width scaling
 

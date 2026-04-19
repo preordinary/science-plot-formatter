@@ -39,18 +39,26 @@ claude plugin install science-plot-formatter@<marketplace>
 
 ## Usage examples
 
+Both skills begin by asking **"what venue are you submitting to?"** and look up the current paper size, column width, and body font size from the official author guidelines via web search — you don't need to know those numbers yourself.
+
 ### paper-font-format
 ```
 Use paper-font-format to format examples/before_paper_format.py.
-Assume A4 two-column paper: column_width=3.5, embed_ratio=1.0, body_pt=10.
+I'm submitting to NeurIPS 2025. The figure will occupy the full column width.
 ```
+
+Claude will look up NeurIPS 2025 author specs, show you what it found, confirm, then rewrite the script.
 
 ### match-reference-style
 ```
 Use match-reference-style to align examples/target_lineplot.py with
-examples/reference_heatmap.py. They will sit side-by-side in one column:
-column_width=3.5, body_pt=10, ref_embed_ratio=0.5.
+examples/reference_heatmap.py. Submitting to Nature Communications;
+both figures will sit side-by-side in one column, reference at half-column.
 ```
+
+### Fallback (no venue / offline)
+
+If you can't name a venue or web lookup isn't available, the skill will fall back to asking for `column_width_in` and `body_pt` directly (with a small preset menu to choose from).
 
 ## Repository layout
 
@@ -72,6 +80,7 @@ A figure drawn at `figsize = (w, h)` inches and embedded at on-page width `W_pag
 
 ## Design principles
 
+- **Ask for the venue, not for column widths.** Users know what they're submitting to; they don't necessarily know that venue's current `\textwidth`. The skills look it up.
 - **Never scale the user's existing font sizes.** They're usually out of proportion to begin with. Derive absolute targets from paper conventions and figure's page size, then completely overwrite.
 - **Skill 1 treats `figsize` as sacred**; skill 2 redesigns it because the target is being composed with another figure.
 - **Readability floor at 6 pt** on the printed page for every text element — enforced after all computation.

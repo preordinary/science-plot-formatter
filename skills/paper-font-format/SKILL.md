@@ -15,17 +15,59 @@ You are formatting a matplotlib plotting script so that when its saved figure is
 
 ## Inputs to gather
 
-If any are missing in the user's request, ask before proceeding. Defaults are in parens.
+Do **not** immediately ask the user for column widths, body font sizes, or page formats — those are lookup work, not design decisions. Instead, start by asking for the submission target and derive the rest.
 
-1. **figsize** `(w, h)` in inches — read from the target code (`plt.figure(figsize=...)` or `plt.subplots(figsize=...)`). If absent, matplotlib default is `(6.4, 4.8)`; ask the user to confirm or set it.
-2. **body_pt** — the paper's body font size in points. Defaults: Nature 7, Science 9, most A4 journals 10–12. Default **12** if user has no preference.
-3. **column_width_in** — the target column width in inches. Common values:
-   - A4 single-column: **6.5"**
-   - A4 two-column (e.g., IEEE, ACM): **3.35"–3.5"**
-   - Nature single-column: **3.5"** (89 mm)
-   - Nature double-column: **7.2"** (183 mm)
-   - Science single-column: **2.28"** (58 mm)
-4. **embed_ratio** — fraction of `column_width_in` the figure will occupy (default **1.0**). E.g., `0.5` for a half-column.
+### Step A — ask for the venue first
+
+Ask the user (as the very first interaction): **"What conference or journal are you submitting this figure to?"**
+
+If the user gives a venue name (e.g. "NeurIPS 2025", "Nature Methods", "IEEE TVCG", "ICML", "CVPR", "ACM CHI"), proceed to Step B. If the user cannot name one, fall back to Step D (manual).
+
+### Step B — look up the venue's current template specs
+
+Use `WebSearch` / `WebFetch` to find the venue's **latest official author guidelines or LaTeX template** and extract:
+
+- **paper size** (US Letter 8.5 × 11" vs. A4 210 × 297 mm)
+- **column layout** (single-column, two-column)
+- **column width** in inches or millimetres (look for values in the template's `\columnwidth`, `\textwidth`, or the guidelines' "figure width" instructions)
+- **body font size** in pt (look for `\documentclass[Npt]` or explicit statements in the guidelines)
+
+Prefer primary sources in this order:
+1. The venue's own author-kit / style-file repository (e.g. `neurips.cc`, `openreview` for confs; journal's "for authors" page).
+2. The venue's published LaTeX class / style file (`.cls` / `.sty`) — it contains the ground truth.
+3. A recent accepted paper from the venue as a secondary sanity check (not primary — templates change between years).
+
+When citing, include the URL so the user can verify.
+
+### Step C — show the user what you found and ask for confirmation
+
+Present a short summary like:
+
+> Found for **NeurIPS 2025** (source: `https://neurips.cc/Conferences/2025/CallForPapers`):
+> - Paper size: US Letter
+> - Layout: single-column
+> - Column width (`\textwidth`): **5.5"**
+> - Body font: **10 pt**
+>
+> Using these unless you say otherwise.
+
+If the user corrects a value, use the corrected value. If the user says "looks good", proceed.
+
+### Step D — fallback when venue is unknown or unfetchable
+
+If the user can't name a venue, or the lookup in Step B fails (no network, ambiguous results, new venue with no template yet), fall back to asking directly for:
+
+- **column_width_in** (default 6.5" for single-column A4/Letter)
+- **body_pt** (default 12)
+
+and offer a short preset menu if helpful (Nature / Science / IEEE two-column / ACM / generic A4).
+
+### Always-required inputs (regardless of venue)
+
+Regardless of whether venue lookup succeeded:
+
+- **figsize** `(w, h)` in inches — read from the target code (`plt.figure(figsize=...)` or `plt.subplots(figsize=...)`). If absent, matplotlib default is `(6.4, 4.8)`; ask the user to confirm or set it.
+- **embed_ratio** — fraction of the column width that this particular figure will occupy (default **1.0**). E.g., `0.5` for a half-column, `2.0` for a two-column-spanning figure in a two-column layout.
 
 ## Step-by-step procedure
 
