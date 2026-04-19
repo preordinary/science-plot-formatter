@@ -1,6 +1,8 @@
-# Font scaling math
+# Visual system math
 
 Human-readable reference for the math used by both skills. Skills themselves encode this — this doc is for debugging, onboarding, and decision-making.
+
+Every visual element of a matplotlib figure — text, strokes, markers, bar/patch edges, grid, error-bar caps — needs to be sized coherently for the figure's final physical size on the page. Adjusting only fonts leaves the figure visually unbalanced. The same `/ s` reverse-scaling formula applies to every point-valued quantity.
 
 ## The fundamental relation
 
@@ -74,22 +76,62 @@ After all lookups and floors: require `title ≥ label ≥ tick`. If `body_pt` i
 
 When only a venue name is available but a live lookup is impossible (offline, venue not found), fall back to this table and **tell the user** which row you used and that it may be out of date.
 
-## Line and marker width scaling
+## Full visual system — page pt targets
 
-Matplotlib's built-in defaults are roughly:
+Every point-valued rcParam follows `code_value = page_pt / s`. The only thing that differs is the target page pt for each category.
 
-| rcParam | Default |
+### Strokes (fixed page pt — typographic conventions)
+
+| rcParam | Target page pt |
 |---|---|
 | `axes.linewidth` | 0.8 |
-| `xtick.major.width` | 0.8 |
-| `xtick.minor.width` | 0.6 |
-| `xtick.major.size` | 3.5 |
-| `xtick.minor.size` | 2.0 |
-| `lines.linewidth` | 1.5 |
-| `lines.markersize` | 6.0 |
-| `patch.linewidth` | 1.0 |
+| `xtick.major.width` / `ytick.major.width` | 0.8 |
+| `xtick.minor.width` / `ytick.minor.width` | 0.5 |
+| `grid.linewidth` | 0.5 |
+| `patch.linewidth` (bar/rect edges) | 0.8 |
+| `hatch.linewidth` | 0.8 |
+| boxplot linewidths (box/whisker/cap/median) | 0.8 |
+| boxplot flier `markeredgewidth` | 0.5 |
 
-When the figure is shrunk on the page (`s < 1`), these render as hairline — divide by `s` to preserve their page-pt appearance. When the figure is enlarged on the page (`s > 1`), they would look bulky — the same `1/s` correction shrinks the code value so it renders normally.
+### Lengths (fixed page pt)
+
+| rcParam | Target page pt |
+|---|---|
+| `xtick.major.size` / `ytick.major.size` | 3.5 |
+| `xtick.minor.size` / `ytick.minor.size` | 2.0 |
+| `xtick.major.pad` / `ytick.major.pad` | 3.0 |
+| `axes.labelpad` | 3.5 |
+
+### Plot lines, markers, error bars (band by `W_page`)
+
+Lightly heavier strokes for large figures, lighter for small — so plot lines stay visible but don't overwhelm compact subplots.
+
+| Quantity | ≤ 2.5" | 2.5"–5" | ≥ 5" |
+|---|---|---|---|
+| `lines.linewidth` | 1.0 | 1.25 | 1.5 |
+| `lines.markersize` | 3.0 | 4.0 | 5.0 |
+| `lines.markeredgewidth` | 0.5 | 0.6 | 0.8 |
+| errorbar `capsize` | 1.8 | 2.5 | 3.0 |
+| errorbar `capthick` | = `axes.linewidth` | = `axes.linewidth` | = `axes.linewidth` |
+
+### Consistency invariants (checked after computing code values)
+
+- `title_page ≥ label_page ≥ tick_page` — hierarchy preserved.
+- `lines.linewidth_page > axes.linewidth_page` — plot strokes stand out from the frame.
+- `lines.markersize_page ≥ 3 × lines.linewidth_page` — markers read as points, not beads on a line.
+- All text elements render ≥ 6 pt on page (readability floor).
+
+### Bar `width=` is data-coord, not a page quantity
+
+`ax.bar(..., width=0.8)` is in data coordinates (a fraction of category spacing). It does **not** follow the `/ s` rule — it stays constant regardless of embedding scale. It is adjusted only by a semantic review (bar count vs figure size), not by scaling.
+
+### Scatter `s=` is area in page pt², but sometimes data
+
+If `s=` is a constant scalar, it's a marker area in pt² — scale it so `√s_code × s = markersize_page`. If `s=` is a per-point array, it's encoding data and is untouched.
+
+### Errorbar `capthick` is not in rcParams
+
+`capthick` must be set explicitly on each `ax.errorbar(...)` call. Use the same page pt target as `axes.linewidth`.
 
 ## Why `figsize` is sacred in skill 1 but fluid in skill 2
 

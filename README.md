@@ -5,10 +5,10 @@ A Claude Code plugin (skills only) that formats matplotlib plotting scripts for 
 ## Two skills
 
 ### `paper-font-format`
-Given a plotting script plus `(body_pt, column_width, embed_ratio)`, recomputes all fonts and line widths from scratch so the figure reads correctly when embedded at the specified width. **Keeps `figsize` unchanged.** Title is anchored to the paper's body font; secondary and tertiary fonts adapt to the figure's final on-page width (the smaller the figure, the tighter the hierarchy).
+Given a plotting script plus the target venue (or paper dimensions), recomputes the **entire visual system** from scratch: fonts, axis spines, tick widths and lengths, plot line thickness, marker sizes, bar/patch edges, grid, error-bar caps. Every quantity is derived from the figure's final physical size on the page, so the figure reads as one coherent design. **Keeps `figsize` unchanged.** Title is anchored to the paper's body font; secondary and tertiary fonts adapt to the figure's final on-page width; stroke weights and marker sizes follow typographic conventions.
 
 ### `match-reference-style`
-Given a reference script the user has already tuned and a target script to harmonize with it, aligns on-page fonts between the two and redesigns the target's `figsize` to fit the intended composed layout (e.g., side-by-side in one column). Respects each chart type's natural aspect ratio (heatmap ≈ 1:1, line plot ≈ 3:2) within ±20 % of the reference's height.
+Given a reference script the user has already tuned and a target script to harmonize with it, aligns the **entire visual system** between the two (fonts, strokes, markers, patches, error-bar caps) so both figures read at matching on-page weight, and redesigns the target's `figsize` to fit the intended composed layout (e.g., side-by-side in one column). Respects each chart type's natural aspect ratio (heatmap ≈ 1:1, line plot ≈ 3:2) within ±20 % of the reference's height.
 
 ## Installation
 
@@ -81,9 +81,11 @@ A figure drawn at `figsize = (w, h)` inches and embedded at on-page width `W_pag
 ## Design principles
 
 - **Ask for the venue, not for column widths.** Users know what they're submitting to; they don't necessarily know that venue's current `\textwidth`. The skills look it up.
-- **Never scale the user's existing font sizes.** They're usually out of proportion to begin with. Derive absolute targets from paper conventions and figure's page size, then completely overwrite.
+- **Harmonize the whole visual system, not just fonts.** Changing text alone leaves the figure unbalanced — axis spines, tick widths, plot line thickness, marker size, patch edges, and error-bar caps all scale together so the figure reads as one design at its final page size.
+- **Never scale the user's existing values.** They're usually out of proportion to begin with. Derive absolute targets from paper conventions and figure's page size, then completely overwrite.
 - **Skill 1 treats `figsize` as sacred**; skill 2 redesigns it because the target is being composed with another figure.
 - **Readability floor at 6 pt** on the printed page for every text element — enforced after all computation.
+- **Consistency invariants** are checked before writing: `title ≥ label ≥ tick`, `plot line > axis spine`, `markersize ≥ 3× line width`.
 
 ## Non-goals (v0.1)
 

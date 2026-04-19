@@ -1,171 +1,225 @@
 ---
 name: match-reference-style
-description: Use when a user has one matplotlib script they have already tuned visually (the reference) and another script they want visually harmonized with it for joint inclusion in a paper. Unlike paper-font-format, this skill also rewrites figsize — because the two figures will share a layout (typically side-by-side), and the target may be a different chart type whose natural aspect ratio differs from the reference.
+description: Use when a user has one matplotlib script already tuned visually (the reference) and another script to harmonize with it for joint inclusion in a paper. Aligns the whole visual system — typography, line widths, tick widths, marker sizes, patch edges, error-bar caps — to match the reference's on-page appearance, and redesigns the target's figsize to fit the composed layout. Unlike paper-font-format, figsize is rewritten here; unlike a literal copy, numbers are never copied directly because the two figures may differ in chart type, scale, and page position.
 ---
 
 # match-reference-style
 
-You are aligning a target matplotlib script to a reference matplotlib script so that **when both figures appear together in the paper, they look visually unified** — same on-page font sizes, coordinated heights — while still respecting each chart type's natural proportions.
+You are aligning a target matplotlib script to a reference matplotlib script so that **when both figures appear together in the paper, every visual element reads at a consistent physical size and stroke weight across the two figures** — fonts, line widths, tick widths, marker sizes, patch edges, error-bar caps — while respecting each chart type's natural aspect ratio.
 
-## Critical principle
+## Critical principles
 
-**Do not copy the reference's `figsize` or `fontsize` numbers literally.** Those numbers are only correct for the reference's own scale factor and chart type. What you preserve across the two figures is the **physical truth on the printed page**:
+1. **Match the physical truth on the printed page, not the code numbers.**
+   The reference's `figsize`, `fontsize`, `linewidth`, `markersize` etc. are only correct for the reference's own scale factor. Copy them and they render at the wrong physical size in the target. The invariant to preserve across the two figures is what the reader *sees on the page*: the on-page pt of every text element, the on-page pt of every stroke, the on-page pt of every marker.
 
-- Each font element should render at the same absolute pt on the page in both figures (so readers perceive consistent text).
-- The target's on-page height should coordinate with the reference's on-page height (often equal in a side-by-side layout), but with the target's natural aspect ratio as a soft constraint so you don't crush a line plot into a square or stretch a heatmap flat.
+2. **Harmonize the entire visual system, not just fonts.**
+   If the reference's axes spines render at 0.8 pt on the page, the target's must too — otherwise one figure looks heavier than the other even with matching text. The same goes for plot line thickness, tick widths, marker sizes, bar/patch edges, and error-bar caps. Mismatched stroke weight is as visually jarring as mismatched text.
 
-This is different from `paper-font-format`: there, `figsize` is fixed by the user. Here, you redesign `figsize` for the target because it's being composed with another figure.
+3. **Redesign `figsize` for the composed layout.**
+   Unlike `paper-font-format`, the target's `figsize` **is** rewritten here, because the two figures are being composed into a shared layout (side-by-side, stacked, etc.). Natural aspect ratio of the target chart type is a soft constraint: prefer matching the reference's on-page height, but clamp within ±20 % of the target's natural aspect so a line plot isn't crushed square or a heatmap stretched flat.
 
-## Inputs to gather
+4. **Never scale by a ratio of reference / target code values.**
+   Always go through the physical-page layer: `ref_code_value × s_ref → page_value → page_value / s_tgt = tgt_code_value`.
 
-Like `paper-font-format`, start from the submission target, not from column-width numbers.
+5. **Data and semantics untouched.** Colors, colormaps, linestyles, marker glyphs, data, axis labels' text — none of these change.
 
-### Step A — ask for the venue first
+## The relations
 
-Ask: **"What conference or journal are you submitting to?"** Then use `WebSearch` / `WebFetch` to look up the venue's current author guidelines and extract paper size, column layout, column width, and body font size. Show the user what you found (with source URL) and let them confirm or correct.
+For the reference:
 
-Prefer primary sources: the venue's author-kit / LaTeX class file / official "for authors" page. Templates change between years, so do not rely on memory — always look up current values.
+```
+s_ref       = (column_width_in * ref_embed_ratio) / w_ref
+W_ref_page  = column_width_in * ref_embed_ratio
+H_ref_page  = h_ref * s_ref
+page_val[e] = ref_code_val[e] * s_ref          # for every point-valued element
+```
 
-If venue lookup fails or the user can't name one, fall back to asking directly for `column_width_in` and `body_pt` (default 6.5" / 12 pt for generic single-column A4/Letter).
+For the target (after choosing `tgt_figsize_new`):
 
-### Always-required inputs (regardless of venue)
-
-After venue is resolved, also ask for:
-
-1. **Reference script path** and **target script path**.
-2. **Layout relationship** between the two figures in the paper:
-   - `side-by-side-same-column` (both fit in one column)
-   - `side-by-side-two-column` (side-by-side across a two-column page)
-   - `stacked` (one above the other)
-   - `independent` (just want visual consistency, no shared row/column)
-3. **Reference `embed_ratio`** — what fraction of a column does the reference occupy in the final paper? (This is how you derive the reference's scale. Common: 0.5 for half-column, 1.0 for full-column, 2.0 for two-column-spanning.)
-4. **Inter-figure gap** for side-by-side layouts (default **0.15"**).
+```
+s_tgt       = W_tgt_page / tgt_figsize_new[0]
+tgt_code_val[e] = page_val[e] / s_tgt          # page-pt matches reference
+```
 
 ## Step-by-step procedure
 
-### 1. Extract the reference's "physical truth"
+### 1. Gather inputs
 
-Read the reference script. Determine:
+**Step A — venue first.** Ask: *"What conference or journal are you submitting to?"* Use `WebSearch` / `WebFetch` on the official author guidelines / LaTeX class file to extract paper size, column layout, column width, body font size. Show the user what you found with a source URL. Fall back to asking directly if lookup fails.
+
+**Step B — always-required inputs:**
+
+1. **Reference script path** and **target script path**.
+2. **Layout relationship** in the paper:
+   - `side-by-side-same-column` — both fit in one column
+   - `side-by-side-two-column` — side-by-side across a two-column page
+   - `stacked` — one above the other
+   - `independent` — just want consistency, no shared row/column
+3. **Reference `embed_ratio`** — what fraction of a column the reference occupies (commonly 0.5 for half-column, 1.0 for full-column, 2.0 for two-column-spanning).
+4. **Inter-figure gap** for side-by-side layouts (default **0.15"**).
+
+### 2. Extract the reference's physical truth
+
+Read the reference script. Extract:
 
 - `ref_figsize = (w_ref, h_ref)` from the code.
-- `ref_font_code = { title, label, tick, legend, annotation }` in code pt — read from both `rcParams` updates and explicit `fontsize=` args. If an element has no explicit value, fall back to the rcParams default it would inherit (e.g., `axes.titlesize` defaults to `font.size * 1.2` — but if `font.size` is untouched you can assume 10.0).
-- Reference scale: `s_ref = (column_width_in * ref_embed_ratio) / w_ref`.
-- Reference on-page dimensions: `W_ref_page = column_width_in * ref_embed_ratio`, `H_ref_page = h_ref * s_ref`.
-- Reference on-page pt per element: `page_pt[elem] = ref_font_code[elem] * s_ref`.
+- `ref_code_val` for every visual element it sets (rcParams + explicit kwargs). Categories to cover, matching section 3 of `paper-font-format`:
+  - **Typography**: title, label, tick, legend, annotation, suptitle.
+  - **Strokes**: `axes.linewidth`, `xtick.major.width`/`ytick.major.width`, `xtick.minor.width`/`ytick.minor.width`, `grid.linewidth`, `patch.linewidth`, `hatch.linewidth`, boxplot widths.
+  - **Lengths**: `xtick.major.size`/`ytick.major.size`, `xtick.minor.size`/`ytick.minor.size`, tick pads, `axes.labelpad`.
+  - **Lines/markers**: `lines.linewidth`, `lines.markersize`, `lines.markeredgewidth`.
+  - **Errorbars** (if present): `capsize`, `capthick`.
+  - **Bar width** (if reference uses `ax.bar`): record the numeric width argument (data-coord, not to be `/ s`-ed).
 
-### 2. Determine the target's on-page dimensions
+For unset elements, use matplotlib's defaults:
 
-Target on-page **width** is driven by layout:
-
-| Layout | Target `W_tgt_page` |
+| Element | matplotlib default |
 |---|---|
-| side-by-side-same-column | `(column_width_in - gap - W_ref_page)` (or `(column_width_in - gap) / 2` if split evenly) |
+| `font.size` | 10 |
+| `axes.titlesize` | 1.2 × font.size (≈ 12) |
+| `axes.labelsize` | font.size (≈ 10) |
+| `xtick.labelsize` / `ytick.labelsize` | font.size (≈ 10) |
+| `legend.fontsize` | font.size (≈ 10) |
+| `axes.linewidth` | 0.8 |
+| `xtick.major.width` | 0.8 |
+| `xtick.minor.width` | 0.6 |
+| `xtick.major.size` | 3.5 |
+| `xtick.minor.size` | 2.0 |
+| `lines.linewidth` | 1.5 |
+| `lines.markersize` | 6.0 |
+| `patch.linewidth` | 1.0 |
+| `grid.linewidth` | 0.8 |
+
+Then compute `s_ref` and for every element:
+
+```
+page_val[e] = ref_code_val[e] * s_ref
+```
+
+Also record `W_ref_page`, `H_ref_page` for layout math.
+
+### 3. Choose target on-page width and height
+
+**Width** — from layout:
+
+| Layout | `W_tgt_page` |
+|---|---|
+| side-by-side-same-column | `(column_width_in - gap - W_ref_page)` or even split `(column_width_in - gap) / 2` |
 | side-by-side-two-column | `(2 * column_width_in + col_gap - gap - W_ref_page)` |
-| stacked | `W_ref_page` (match reference width) |
+| stacked | `W_ref_page` |
 | independent | ask user; default `column_width_in * embed_ratio_tgt` |
 
-Target on-page **height** is where chart-type aesthetics kick in:
+**Height** — from chart type + reference:
 
-1. Detect the target's chart type from its code. Typical signals:
-   - heatmap / confusion matrix: `imshow`, `pcolormesh`, `sns.heatmap`
-   - line / timeseries: `plot` with many `plot` calls or x is ordered sequence
-   - scatter: `scatter`
-   - bar: `bar` / `barh`
-   - distribution: `hist`, `kdeplot`, `violinplot`, `boxplot`
-   - map / spatial: `contour`, `contourf`, `tricontour`
-2. Look up natural aspect ratio (height / width) for that type:
-   - heatmap / spatial: **1.0** (square)
-   - line / scatter / timeseries: **0.62** (roughly 3:2 wide, close to golden ratio)
-   - bar: **0.62**
-   - distribution: **0.75** (4:3-ish)
-   - other / unknown: **0.62**
-3. Compute the "natural" height: `H_nat = W_tgt_page * natural_aspect`.
-4. Coordinate with reference:
-   - If layout is side-by-side (any kind) or stacked: prefer `H_tgt_page = H_ref_page` to make the row or column align.
-   - If `H_ref_page` falls within `[H_nat * 0.8, H_nat * 1.2]`, use `H_tgt_page = H_ref_page` (full match).
-   - Otherwise, use `H_tgt_page = clamp(H_ref_page, H_nat * 0.8, H_nat * 1.2)` — stay close to reference but don't deform the target's natural proportions by more than ±20%.
-   - If layout is `independent`, just use `H_nat` and skip coordination.
-5. **Report** which branch was taken (full match vs clamped), so the user knows why the two figures aren't exactly the same height.
+1. Detect target chart type (`imshow`/`pcolormesh`/`sns.heatmap` → heatmap; `plot` → line; `scatter`; `bar`/`barh`; `hist`/`kdeplot`/`violinplot`/`boxplot` → distribution; `contour`/`contourf` → spatial).
+2. Natural aspect (`height / width`): heatmap/spatial 1.00; line/scatter/bar 0.62; distribution 0.75; unknown 0.62.
+3. `H_nat = W_tgt_page * natural_aspect`.
+4. If layout is side-by-side or stacked and `H_ref_page ∈ [H_nat × 0.8, H_nat × 1.2]`: use `H_tgt_page = H_ref_page` (full match, preferred).
+5. Otherwise clamp: `H_tgt_page = clamp(H_ref_page, H_nat × 0.8, H_nat × 1.2)` — stay close to reference but don't deform target by more than ±20 %.
+6. For `independent`, just use `H_nat`.
 
-### 3. Set target figsize
+Always **report** which branch you took (full match vs clamp), so the user understands why.
 
-Simplest: use the on-page dimensions as the figsize itself (`embed_ratio_tgt = 1.0`), so the scale is 1:1 by construction.
+### 4. Set target figsize and scale
+
+Use the on-page dimensions as figsize itself (`embed_ratio_tgt = 1.0`):
 
 ```
 tgt_figsize_new = (W_tgt_page, H_tgt_page)
 s_tgt           = 1.0
 ```
 
-(If user wants a specific non-1 embed ratio for the target, compute `tgt_figsize_new = (W_tgt_page / embed_ratio_tgt, H_tgt_page / embed_ratio_tgt)` and `s_tgt = embed_ratio_tgt` — but default to 1:1 unless asked.)
+(If user wants a specific non-1 embed ratio for the target — e.g., they'll further shrink it in LaTeX — divide figsize accordingly and set `s_tgt = embed_ratio_tgt`.)
 
-### 4. Compute target code pt per element
+### 5. Compute target code values per element
 
-For each element, target code pt = reference's on-page pt divided by the target's scale:
+For every element category from section 2, the target's code value = reference's on-page value divided by target's scale:
 
 ```
-tgt_code_pt[elem] = page_pt[elem] / s_tgt
+tgt_code_val[e] = page_val[e] / s_tgt
 ```
 
-Then apply safety floors (same as `paper-font-format`):
+Apply the same consistency net from `paper-font-format`:
 
-- Any element whose `page_pt` is < 6 gets raised to 6 before dividing by `s_tgt`.
-- Keep `title ≥ label ≥ tick` on page; clamp if the reference violates this.
+- Readability floor: if any element's `page_val` < 6 pt (for text) or violates the stroke-vs-frame / marker-vs-line invariants below, raise it.
+- Ordering: `title ≥ label ≥ tick` on page (in page pt). Clamp upward if the reference itself violates this and it would look odd.
+- `lines.linewidth_page > axes.linewidth_page` — plot strokes must stand out from the frame.
+- `markersize_page ≥ 3 × lines.linewidth_page` — markers read as points, not dots on the line.
 
-Round code pt to nearest **0.5 pt**.
+Round code values: 0.5 for fonts and markers; 0.1 for stroke linewidths.
 
-### 5. Line and marker widths
+### 6. Errorbars — explicit per-call
 
-Scale by `1 / s_tgt` (same as `paper-font-format` step 5), but use the reference's page-pt line width as the anchor if the reference explicitly sets it. Otherwise use the same defaults (`axes.linewidth = 0.8 / s_tgt`, etc.).
+`capthick` is not read from rcParams; it must be set explicitly on each `ax.errorbar(...)` call. Target's `capthick_code = page_val[axes.linewidth] / s_tgt`. Target's `capsize_code = page_val[capsize] / s_tgt` (where `page_val[capsize]` is taken from the reference if present, else the default band value from `paper-font-format` section 3d at the target's `W_tgt_page` band).
 
-### 6. Rewrite the target script
+### 7. Bar geometry (if target uses `ax.bar` / `barh`)
 
-- Replace its `figsize` with `tgt_figsize_new`.
-- Insert (or overwrite) a single `plt.rcParams.update({...})` block right after the matplotlib import, with all font sizes and line widths.
-- Walk the rest of the target script and replace every explicit `fontsize=<N>` / `size=<N>` kwarg with the matching computed code pt (or drop it so the rcParams value takes effect).
-- Do **not** change:
-  - data, colormaps, linestyles, marker choices, alpha, etc.
-  - axis labels' text, tick labels' text, legend text
-  - the structural choice of plot types and their order
+Bar `width=` is data-coord, not `/ s`. Harmonization rule:
 
-### 7. Output
+1. If the target explicitly sets `width=X` with `X ∈ [0.5, 0.95]`, leave it.
+2. If the reference also uses bars and sets `width=X_ref`, copy that to the target (assumes user has deliberately tuned it).
+3. Otherwise, apply the section-6 semantic rule from `paper-font-format` at the target's `W_tgt_page` and its own bar count.
+
+Do not port the reference's bar width to a target that is not a bar chart.
+
+### 8. Rewrite the target script
+
+1. Replace its `figsize` with `tgt_figsize_new`.
+2. Insert or overwrite a single `plt.rcParams.update({...})` block after the matplotlib import, containing the full visual system (same keys as listed in `paper-font-format` section 7).
+3. Walk the target script and overwrite every explicit `fontsize=`, `linewidth=`/`lw=`, `markersize=`/`ms=`, `markeredgewidth=`/`mew=`, `capsize=`, `capthick=`, `size=` kwarg. Never leave stale values.
+4. For `ax.errorbar` calls, set `capsize` and `capthick` explicitly to the computed values.
+5. Apply the bar width decision (section 7) if applicable.
+6. Do not touch: data, colormaps, colors, linestyles, marker glyphs, alpha, axis limits, label text.
+
+### 9. Output
 
 1. **The rewritten target script**, ready to run.
-2. **A comparison table**:
+2. **Side-by-side comparison table** — for every visual element, `reference page value | target page value | target code value`:
 
-   | Element | Reference page pt | Target page pt | Target code pt |
-   |---|---|---|---|
-   | title | ... | ... | ... |
-   | label | ... | ... | ... |
-   | tick  | ... | ... | ... |
-   | legend | ... | ... | ... |
+   | Category | Element | Reference page | Target page | Target code |
+   |---|---|---|---|---|
+   | Typography | title / label / tick / legend / annotation | … | … | … |
+   | Strokes | axes / tick-major / tick-minor / grid / patch | … | … | … |
+   | Lengths | tick.major.size / tick.minor.size / pads | … | … | … |
+   | Lines | lines.linewidth / markersize / markeredgewidth | … | … | … |
+   | Errorbars | capsize / capthick | … | … | … |
+   | Bars (if any) | width decision | … | … | … |
 
-3. **A layout note**: the on-page dimensions of reference and target, and why the target height is what it is (full match vs ±20% clamp) given its chart type.
+3. **Layout note**: `W_ref_page × H_ref_page` vs `W_tgt_page × H_tgt_page`; which height branch was taken (full match or ±20 % clamp) and why.
+4. **Consistency checks**: the same four checks as `paper-font-format` step 5, run on the target's final page values.
 
 ## Worked example
 
-Reference: a heatmap, `ref_figsize=(3.5, 3.5)`, `font.size=10`, `axes.titlesize=10`, `axes.labelsize=9`, `xtick.labelsize=8`. User will embed it at full width of a 3.5" column (`ref_embed_ratio = 1.0`).
+Venue: Nature Communications (double-column, column_width_in = 3.5", body_pt = 7).
 
-- `s_ref = 3.5 / 3.5 = 1.0`
-- `W_ref_page = 3.5"`, `H_ref_page = 3.5"`
-- Page pt: title=10, label=9, tick=8.
+Reference: heatmap, `ref_figsize = (3.5, 3.5)`, sets `font.size=14`, `axes.titlesize=14`, `axes.labelsize=12.6`, `xtick.labelsize=11.2`, `ytick.labelsize=11.2`, `legend.fontsize=11.2`, `axes.linewidth=1.6`, `xtick.major.width=1.6`, `xtick.major.size=7`, `lines.linewidth=2`, `lines.markersize=8`.
 
-Target: a line plot, layout = `side-by-side-same-column`, `column_width_in = 3.5`, `gap = 0.15`.
+User says `ref_embed_ratio = 0.5`. Then:
 
-- `W_tgt_page = (3.5 - 0.15 - 3.5)` → negative; this layout doesn't fit. Fall back to even split: `(3.5 - 0.15) / 2 = 1.675"` (and tell the user the reference is too wide to sit next to the target in one column — prompt for resolution).
+- `W_ref_page = 3.5 × 0.5 = 1.75"`, `s_ref = 1.75 / 3.5 = 0.5`, `H_ref_page = 1.75"`.
+- Page values: title = 14 × 0.5 = 7 pt, label = 12.6 × 0.5 = 6.3 pt, tick = 11.2 × 0.5 = 5.6 pt → **below 6 pt floor, clamp to 6**. Axes linewidth page = 1.6 × 0.5 = 0.8 pt. lines.linewidth page = 2 × 0.5 = 1.0 pt. markersize page = 8 × 0.5 = 4.0 pt. tick.major.size page = 7 × 0.5 = 3.5 pt. patch.linewidth page = 1.0 × 0.5 = 0.5 pt.
 
-Alternative with realistic sizing (`ref_embed_ratio = 0.5`):
+Target: line plot, layout = `side-by-side-same-column`, `gap = 0.15`.
 
-- `W_ref_page = 1.75`, `s_ref = 1.75 / 3.5 = 0.5`, `H_ref_page = 1.75`.
-- `W_tgt_page = (3.5 - 0.15) / 2 = 1.675"`.
-- Target is a line plot → natural aspect = 0.62 → `H_nat = 1.675 * 0.62 ≈ 1.04"`.
-- `H_ref_page = 1.75` is outside `[H_nat * 0.8, H_nat * 1.2] = [0.83, 1.24]`, so clamp: `H_tgt_page = 1.24"`.
+- `W_tgt_page = (3.5 - 0.15) / 2 ≈ 1.675"` (assuming even split). Nature has gutter; the actual available may be slightly less but this is fine for a 0.1 Ball-park.
+- Natural aspect for line plot = 0.62 → `H_nat = 1.675 × 0.62 ≈ 1.04"`.
+- `H_ref_page = 1.75"` outside `[0.83, 1.24]`; clamp → `H_tgt_page = 1.24"`.
 - `tgt_figsize_new = (1.675, 1.24)`, `s_tgt = 1.0`.
-- Page pt inherited from reference: title=10, label=9, tick=8 → code pt identical (since `s_tgt = 1`).
-- Layout note to user: target held below reference height (1.24" vs 1.75") to avoid deforming the line plot's natural 3:2 ratio.
+- Every target code value = page value (identity at `s_tgt = 1.0`):
+  - Typography (post-floor): title 7, label 6.5, tick/legend 6.0 (rounded).
+  - Strokes: axes 0.8, tick.major.width 0.8, tick.minor.width 0.5, grid 0.5, patch 0.5 (copied page-pt from ref).
+  - Lengths: tick.major.size 3.5, tick.minor.size 2.0, pads 3.0.
+  - Lines: lines.linewidth 1.0, markersize 4.0, markeredgewidth 0.5.
+  - Errorbars: capsize 2.0, capthick 0.8.
+- Layout note: target held at 1.24" tall (vs reference 1.75") to avoid deforming the line plot's natural 3:2 ratio.
+- Consistency checks: title 7 ≥ label 6.5 ≥ tick 6.0 ✓; lines.linewidth 1.0 > axes.linewidth 0.8 ✓; markersize 4.0 ≥ 3 × 1.0 ✓.
 
 ## Common mistakes to avoid
 
-- Copying `figsize` directly from the reference — it was sized for the reference's embedding, not the target's.
-- Copying code-pt fontsize values directly — they're only correct for `s_ref`, not `s_tgt`.
-- Forcing the target to match the reference's height exactly even when the chart type makes it ugly — the ±20% clamp is there for a reason.
-- Treating the two figures as independent — the whole point is page-level visual harmony.
+- Copying `figsize` or `fontsize` literal numbers from reference to target — always go through page-pt.
+- Matching only fonts, leaving strokes/markers/patches at target's old values — creates visual mismatch between the two figures.
+- Forcing target height = reference height even when it deforms the target's chart type (skip the ±20 % clamp).
+- Forgetting `capthick` per-call on errorbars.
+- Copying reference bar width to a target that isn't a bar chart.
+- Scaling user's scatter `s=` when it's a per-point data-encoding array.
+- Ignoring the readability floor — a reference that itself renders tick text below 6 pt on page should be clamped in the target (floors fix errors, they don't propagate them).

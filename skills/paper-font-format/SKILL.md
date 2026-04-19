@@ -1,181 +1,263 @@
 ---
 name: paper-font-format
-description: Use when a user wants to format matplotlib font sizes in a plotting script for inclusion in a scientific paper, given the paper's body font size, column width, and the fraction of column width the figure will occupy. Recomputes all font sizes from scratch based on the figure's final physical size on the page — does not scale the user's existing fontsize values.
+description: Use when a user wants to format a matplotlib plotting script for inclusion in a scientific paper. Derives the full visual system (fonts, line widths, tick widths, marker sizes, bar/patch edges, grid, error-bar caps) from the figure's final physical size on the page, so the figure reads as a visually unified whole at its printed scale. Recomputes every value from scratch — does not scale the user's existing settings.
 ---
 
 # paper-font-format
 
-You are formatting a matplotlib plotting script so that when its saved figure is embedded into a scientific paper at a specified width, **all text in the figure appears at the physically correct pt on the printed page**, with a hierarchy appropriate to how large the figure actually appears in the paper.
+You are formatting a matplotlib plotting script so that when its saved figure is embedded into a scientific paper at a specified width, **every visual element — text, strokes, markers, bar edges, error-bar caps, grid — reads at the correct physical size on the printed page, and all of these harmonize so the figure looks like one coherent design.**
 
-## Critical principle
+## Critical principles
 
-**Do not scale the user's existing fontsize values.** Users often set secondary/tertiary font sizes by trial and error, and those values are frequently out of proportion. If you just multiply them by a scale factor you preserve (and visually amplify) the error. Instead, **derive every font size from scratch** from (a) the paper's body font size and (b) the figure's final physical width on the page. Then completely overwrite the user's old fontsize values.
+1. **Visual unity is the job, not just font sizing.** Changing text without also adjusting line widths, tick widths, marker sizes, patch edges, and error-bar caps leaves the figure visually unbalanced: big text with hairline axes, or small text with chunky markers. Every time you change a font size, you also change the companion stroke / marker / geometry values.
 
-`figsize` is the one thing you must **not** change — it is set by the user and belongs to the user.
+2. **Never scale the user's existing values.** Users tend to set font sizes, linewidths, and marker sizes by screen trial-and-error; those values are often out of proportion. Multiplying them by a scale factor preserves and amplifies the misproportion. Instead, derive every value from scratch from (a) the paper's body font size and (b) the figure's final physical width on the page, then completely overwrite.
 
-## Inputs to gather
+3. **`figsize` is sacred.** The user chose it for a reason (data aspect, subplot grid). Do not change it.
 
-Do **not** immediately ask the user for column widths, body font sizes, or page formats — those are lookup work, not design decisions. Instead, start by asking for the submission target and derive the rest.
+4. **Data, colors, colormaps, linestyles, marker glyph choices are semantic** — they express meaning about the data. Never touch them. Only change visual weights, not visual choices.
 
-### Step A — ask for the venue first
+## The scaling principle
 
-Ask the user (as the very first interaction): **"What conference or journal are you submitting this figure to?"**
+A figure saved at `figsize = (w, h)` inches and embedded on the page at width `W_page` inches is scaled by:
 
-If the user gives a venue name (e.g. "NeurIPS 2025", "Nature Methods", "IEEE TVCG", "ICML", "CVPR", "ACM CHI"), proceed to Step B. If the user cannot name one, fall back to Step D (manual).
+```
+s = W_page / w
+```
 
-### Step B — look up the venue's current template specs
+Any matplotlib value expressed in **points** (font size, `linewidth`, `markersize`, tick `size`, `capsize`, etc.) declared at `X` pt renders on the printed page at `X * s` pt. So to hit a target **page pt** `T`, the code must set `X = T / s`.
 
-Use `WebSearch` / `WebFetch` to find the venue's **latest official author guidelines or LaTeX template** and extract:
-
-- **paper size** (US Letter 8.5 × 11" vs. A4 210 × 297 mm)
-- **column layout** (single-column, two-column)
-- **column width** in inches or millimetres (look for values in the template's `\columnwidth`, `\textwidth`, or the guidelines' "figure width" instructions)
-- **body font size** in pt (look for `\documentclass[Npt]` or explicit statements in the guidelines)
-
-Prefer primary sources in this order:
-1. The venue's own author-kit / style-file repository (e.g. `neurips.cc`, `openreview` for confs; journal's "for authors" page).
-2. The venue's published LaTeX class / style file (`.cls` / `.sty`) — it contains the ground truth.
-3. A recent accepted paper from the venue as a secondary sanity check (not primary — templates change between years).
-
-When citing, include the URL so the user can verify.
-
-### Step C — show the user what you found and ask for confirmation
-
-Present a short summary like:
-
-> Found for **NeurIPS 2025** (source: `https://neurips.cc/Conferences/2025/CallForPapers`):
-> - Paper size: US Letter
-> - Layout: single-column
-> - Column width (`\textwidth`): **5.5"**
-> - Body font: **10 pt**
->
-> Using these unless you say otherwise.
-
-If the user corrects a value, use the corrected value. If the user says "looks good", proceed.
-
-### Step D — fallback when venue is unknown or unfetchable
-
-If the user can't name a venue, or the lookup in Step B fails (no network, ambiguous results, new venue with no template yet), fall back to asking directly for:
-
-- **column_width_in** (default 6.5" for single-column A4/Letter)
-- **body_pt** (default 12)
-
-and offer a short preset menu if helpful (Nature / Science / IEEE two-column / ACM / generic A4).
-
-### Always-required inputs (regardless of venue)
-
-Regardless of whether venue lookup succeeded:
-
-- **figsize** `(w, h)` in inches — read from the target code (`plt.figure(figsize=...)` or `plt.subplots(figsize=...)`). If absent, matplotlib default is `(6.4, 4.8)`; ask the user to confirm or set it.
-- **embed_ratio** — fraction of the column width that this particular figure will occupy (default **1.0**). E.g., `0.5` for a half-column, `2.0` for a two-column-spanning figure in a two-column layout.
+Bar geometry (`ax.bar(..., width=...)`) is in **data coordinates** and does not follow this rule — it stays the same relative to the x-axis regardless of embedding scale. It is handled separately (see section 6).
 
 ## Step-by-step procedure
 
-### 1. Compute scale factor
+### 1. Gather inputs
+
+**Step A — ask for the venue first.** Ask: *"What conference or journal are you submitting this figure to?"* If the user gives a venue (NeurIPS, Nature, IEEE TVCG, CVPR, etc.), use `WebSearch` / `WebFetch` on the venue's official author guidelines / LaTeX class file / `.cls` to extract:
+
+- paper size (US Letter vs A4)
+- column layout (single / two-column)
+- column width (from `\textwidth` / `\columnwidth` or the guidelines' figure-width instruction)
+- body font size (pt)
+
+Prefer primary sources (venue's own author kit, LaTeX class file, "for authors" page) over third-party summaries. Show the user what you found with a source URL and ask for confirmation before proceeding.
+
+**Step B — if venue lookup fails or user can't name one**, fall back to asking directly for `column_width_in` (default 6.5") and `body_pt` (default 12).
+
+**Step C — always-required inputs regardless of venue:**
+
+- **`figsize` `(w, h)`** — read from the target code (`plt.figure(figsize=...)`, `plt.subplots(figsize=...)`). If absent, matplotlib default is `(6.4, 4.8)`; ask the user to confirm.
+- **`embed_ratio`** — fraction of `column_width_in` this figure occupies (default 1.0; `0.5` = half-column; `2.0` = spans two columns).
+
+### 2. Compute scale factor and figure page width
 
 ```
-W_page = column_width_in * embed_ratio      # figure's final width on page, inches
-s      = W_page / figsize[0]                # scale factor
+W_page = column_width_in * embed_ratio
+s      = W_page / figsize[0]
 ```
 
-A matplotlib fontsize of `X` pt will render at `X * s` pt on the printed page.
-So to achieve a target page pt `T`, set the code pt to `T / s`.
+### 3. Derive target page values for every visual category
 
-### 2. Decide absolute target pt for each element
+For every quantity, define the target **on the printed page** (page pt), then the code value is `target_page_pt / s` rounded to 0.5 pt (or 0.1 for small stroke values).
 
-Base the decision on `W_page` (the figure's final physical width on the page), not on `figsize`, and not on the user's current values.
+#### 3a. Typography — depends on `W_page`
 
-| Figure on-page width `W_page` | Label (axis label) | Tick / Legend / Annotation |
+Title is anchored to `body_pt` and is size-independent. Secondary and tertiary sizes compress on smaller figures to preserve readability hierarchy.
+
+| `W_page` band | Label (axis labels) | Tick / Legend / Annotation |
 |---|---|---|
-| ≤ 2.5" (very small subpanel) | body_pt − 1 | body_pt − 2 |
-| 2.5"–3.5" (small)            | body_pt − 1 | body_pt − 2 |
-| 3.5"–5"  (medium, single-col)| body_pt − 2 | body_pt − 3 |
-| ≥ 5"     (large / two-col)   | body_pt − 2 | body_pt − 4 |
+| ≤ 2.5" (sub-panel) | `body_pt − 1` | `body_pt − 2` |
+| 2.5"–3.5" (small) | `body_pt − 1` | `body_pt − 2` |
+| 3.5"–5" (medium, single-col) | `body_pt − 2` | `body_pt − 3` |
+| ≥ 5" (large / two-col) | `body_pt − 2` | `body_pt − 4` |
 
-- **Title / suptitle** = body_pt (always; this is the "main title = paper body text" anchor).
-- **Caption / figure text** (if any via `fig.text`) ≈ label pt.
-- Suptitle and axes titles both get title pt; for subplots you may use title pt for each axes title and keep suptitle = title pt (unless user asks to differentiate).
+- Title / suptitle: `body_pt`.
+- Caption / `fig.text`: label pt.
 
-Rationale: the smaller the figure appears on the page, the tighter the hierarchy must be, or tertiary text becomes unreadable. The larger the figure, the more visual headroom for a wider hierarchy.
+Readability floor: no element may render below **6 pt** on the page. If a target falls below, clamp to 6. Enforce `title ≥ label ≥ tick` after clamping.
 
-### 3. Enforce floors and ordering
+#### 3b. Strokes — fixed page pt targets (not `W_page`-dependent)
 
-- **Readability floor**: no element may render below **6 pt** on the page. If `target_page_pt < 6`, raise it to 6 before computing the code pt.
-- **Ordering invariant**: `title ≥ label ≥ tick` (in page pt). If your table lookup ever violates this (it shouldn't with the ranges above, but body_pt can be very small), clamp so this holds.
+These are matplotlib's long-established typographic conventions for print, tuned to look crisp but not heavy at body-text sizes. They're the same regardless of figure size; it's the `/ s` step that makes the code value differ.
 
-### 4. Compute code pt
-
-For each element, `code_pt = target_page_pt / s`, rounded to the nearest **0.5 pt**.
-
-### 5. Compute line/marker widths
-
-Thin elements need the same reverse-scaling so they don't look hairline on the page.
-
-| rcParam | Code value |
+| rcParam | Target page pt |
 |---|---|
-| `axes.linewidth` | `0.8 / s` |
-| `xtick.major.width`, `ytick.major.width` | `0.8 / s` |
-| `xtick.minor.width`, `ytick.minor.width` | `0.6 / s` |
-| `xtick.major.size`, `ytick.major.size` | `3.5 / s` |
-| `xtick.minor.size`, `ytick.minor.size` | `2.0 / s` |
-| `lines.linewidth` | `1.25 / s` (only if user hasn't set explicitly for semantic reasons) |
-| `lines.markersize` | `5.0 / s` (same caveat) |
-| `patch.linewidth` | `0.8 / s` |
-| `legend.frameon` | leave as user set; if unset leave default |
+| `axes.linewidth` (spines) | **0.8** |
+| `xtick.major.width`, `ytick.major.width` | **0.8** |
+| `xtick.minor.width`, `ytick.minor.width` | **0.5** |
+| `grid.linewidth` | **0.5** |
+| `patch.linewidth` (bar edges, rect edges) | **0.8** |
+| `hatch.linewidth` | **0.8** |
+| `boxplot.boxprops.linewidth`, `whiskerprops`, `capprops`, `medianprops` | **0.8** |
+| `boxplot.flierprops.markeredgewidth` | **0.5** |
 
-Round to 2 decimals.
+#### 3c. Lengths — fixed page pt targets
 
-### 6. Rewrite the code
+| rcParam | Target page pt |
+|---|---|
+| `xtick.major.size`, `ytick.major.size` | **3.5** |
+| `xtick.minor.size`, `ytick.minor.size` | **2.0** |
+| `xtick.major.pad`, `ytick.major.pad` | **3.0** |
+| `axes.labelpad` | **3.5** |
 
-Apply all font sizes via a single `plt.rcParams.update({...})` block placed right after the matplotlib import. Use these rcParams keys:
+#### 3d. Plot lines, markers, error bars — `W_page`-dependent
 
-- `font.size` → body_pt (the "anchor"; affects any text that doesn't specify its own)
-- `axes.titlesize` → title code pt
-- `figure.titlesize` → title code pt (for suptitle)
-- `axes.labelsize` → label code pt
-- `xtick.labelsize`, `ytick.labelsize` → tick code pt
-- `legend.fontsize` → legend/tick code pt
-- `legend.title_fontsize` → label code pt
+Slightly heavier for large figures so lines remain visible from a distance; slightly lighter for small figures so they don't dominate. Values are on the page.
 
-Then walk the rest of the script and **replace** every explicit `fontsize=<N>` / `size=<N>` argument on `set_title`, `set_xlabel`, `set_ylabel`, `text`, `annotate`, `legend`, `suptitle`, `colorbar.ax.set_ylabel`, colorbar tick labels etc. — overwriting the user's values with the correct absolute pt for that element category. Do not leave any old `fontsize=` values behind; either delete them (if the rcParam covers the element) or replace with the new value.
+| Quantity | ≤ 2.5" | 2.5"–5" | ≥ 5" |
+|---|---|---|---|
+| `lines.linewidth` (page pt) | 1.0 | 1.25 | 1.5 |
+| `lines.markersize` (page pt) | 3.0 | 4.0 | 5.0 |
+| `lines.markeredgewidth` (page pt) | 0.5 | 0.6 | 0.8 |
+| errorbar `capsize` (page pt) | 1.8 | 2.5 | 3.0 |
+| errorbar `capthick` (page pt) | same as `axes.linewidth` (0.8) | same | same |
 
-Do **not** touch:
-- `figsize`
-- data, colors, colormaps, linestyles, markers (semantic choices)
-- axis limits, tick locators, labels' text content
-- the order/type of plots
+For `scatter`, the `s=` argument is in **points squared**. Default `s=36` → marker diameter 6 pt. Derive `target_scatter_s_pt = (lines.markersize)²` in page pt², then code value = `(markersize_page / s)² = markersize_page² / s²`. Only override `scatter` sizes if user passed no explicit `s=` or passed a constant scalar; if `s=` is a per-point array (encoding data), **do not touch** — it's semantic.
 
-### 7. Output
+### 4. Compute code values
 
-Produce two things:
+For every target in section 3 except 3a typography, code value = `page_pt / s`, rounded to:
+
+- 0.5 pt for font sizes and marker/capsize
+- 0.1 pt for stroke linewidths
+
+Example at `s = 0.7`:
+
+- `axes.linewidth` page 0.8 pt → code `0.8 / 0.7 = 1.14`
+- `lines.linewidth` page 1.25 pt → code `1.25 / 0.7 = 1.79`
+- `xtick.major.size` page 3.5 pt → code `3.5 / 0.7 = 5.00`
+- label font page 9 pt → code `9 / 0.7 = 12.86 → round 13.0`
+
+### 5. Consistency pass
+
+Before writing, sanity-check the whole visual system:
+
+- Is `title_page_pt ≥ label_page_pt ≥ tick_page_pt`? (Monotonic hierarchy.)
+- Is `lines.linewidth_page > axes.linewidth_page`? (Plot strokes should stand out from frame by ≥ 30 %, otherwise data disappears into the frame.)
+- Is `lines.markersize_page ≥ 3 × lines.linewidth_page`? (Markers should read as points, not dots on the line.)
+- Does the floor apply anywhere? Note it.
+
+If any check fails, explain why and adjust.
+
+### 6. Semantic bar-geometry review (only if plot uses `ax.bar` / `barh`)
+
+Bar `width` is in data coordinates — it does not follow the `/ s` rule. But it can still look wrong after rescaling if the default 0.8 was chosen for a different context:
+
+1. Count the number of bars along the category axis.
+2. If the user passed an explicit `width=X` and `X ∈ [0.5, 0.95]`, leave it unchanged (assume intentional).
+3. Otherwise, if `width` is default (0.8):
+   - With 1–4 bars in a wide figure (`W_page > 4"`): recommend `width = 0.6` (bars look airier).
+   - With 10+ bars in any figure: recommend `width = 0.8` (default is fine; keep).
+   - With 2–9 bars: keep default 0.8.
+4. Grouped bars (multiple `ax.bar` calls with manual offsets): do not touch widths automatically; the user's layout math is semantic.
+
+Always mention this review in the output report, whether or not you changed anything.
+
+### 7. Rewrite the code
+
+1. **Insert a single `plt.rcParams.update({...})` block** right after the matplotlib import, containing **every** computed value from sections 3a–3d. Do not split it. Use these rcParams keys:
+
+   ```python
+   plt.rcParams.update({
+       # --- Typography ---
+       "font.size":             body_pt_code,
+       "axes.titlesize":        title_code,
+       "figure.titlesize":      title_code,
+       "axes.labelsize":        label_code,
+       "xtick.labelsize":       tick_code,
+       "ytick.labelsize":       tick_code,
+       "legend.fontsize":       legend_code,
+       "legend.title_fontsize": label_code,
+       # --- Strokes ---
+       "axes.linewidth":        axes_lw_code,
+       "xtick.major.width":     tick_major_w_code,
+       "ytick.major.width":     tick_major_w_code,
+       "xtick.minor.width":     tick_minor_w_code,
+       "ytick.minor.width":     tick_minor_w_code,
+       "grid.linewidth":        grid_lw_code,
+       "patch.linewidth":       patch_lw_code,
+       "hatch.linewidth":       hatch_lw_code,
+       # --- Lengths ---
+       "xtick.major.size":      tick_major_size_code,
+       "ytick.major.size":      tick_major_size_code,
+       "xtick.minor.size":      tick_minor_size_code,
+       "ytick.minor.size":      tick_minor_size_code,
+       "xtick.major.pad":       tick_pad_code,
+       "ytick.major.pad":       tick_pad_code,
+       "axes.labelpad":         label_pad_code,
+       # --- Lines / markers ---
+       "lines.linewidth":       lines_lw_code,
+       "lines.markersize":      markersize_code,
+       "lines.markeredgewidth": marker_edge_w_code,
+   })
+   ```
+
+2. **Walk the rest of the script** and overwrite every explicit `fontsize=`, `size=`, `linewidth=`/`lw=`, `markersize=`/`ms=`, `markeredgewidth=`/`mew=`, `capsize=`, `capthick=` argument on calls like `set_title`, `set_xlabel`, `set_ylabel`, `text`, `annotate`, `legend`, `plot`, `errorbar`, `bar`, `axhline`, `axvline`, etc. — either delete them (so rcParams takes over) or replace with the newly computed value. **Never leave stale values** that would override your rcParams.
+
+3. For `ax.errorbar(...)` calls, ensure both `capsize` and `capthick` are set (or fall back to rcParams where possible; for `capthick`, matplotlib does not read it from rcParams — set it explicitly per-call with the computed value).
+
+4. For `ax.bar(...)`: apply the semantic width decision from section 6.
+
+5. Do not touch: `figsize`, data, colormaps, linestyles, marker glyphs (`marker='o'` etc.), colors, alpha, axis limits, label text content.
+
+### 8. Output
 
 1. **The full rewritten script**, ready to run.
-2. **A brief report** containing:
-   - scale factor `s` and `W_page`
-   - for each element: target page pt → code pt
-   - any floors that kicked in (element X hit 6 pt floor)
-   - a one-line sanity check: "title/label/tick on page = A/B/C pt, all ≥ 6 pt, order preserved"
+2. **A visual-system report**, tabulated:
+
+   | Category | Element | Target page value | Code value (`/ s`) |
+   |---|---|---|---|
+   | Typography | title / label / tick / legend | … pt | … pt |
+   | Strokes | axes.linewidth / tick widths / patch / grid | … pt | … pt |
+   | Lengths | tick major/minor size, pads | … pt | … pt |
+   | Lines | `lines.linewidth`, `markersize`, `markeredgewidth` | … | … |
+   | Errorbars | `capsize`, `capthick` | … | … |
+   | Bars | width decision and reason | — | — |
+
+3. **Consistency checks** listed explicitly:
+   - title ≥ label ≥ tick ✓/✗
+   - `lines.linewidth_page > axes.linewidth_page` ✓/✗
+   - `markersize_page ≥ 3 × lines.linewidth_page` ✓/✗
+   - readability floor hits (which elements, if any)
+
+4. **Scale summary**: `W_page = …, s = …`
 
 ## Worked example
 
-User: figsize=(5, 3), body_pt=10, column_width_in=3.5, embed_ratio=1.0.
+Inputs: venue = NeurIPS 2025 (Letter, single-column, `\textwidth ≈ 5.5"`, body 10 pt). `figsize = (5, 3)`, `embed_ratio = 1.0`.
 
 ```
-W_page = 3.5 * 1.0 = 3.5  → falls in "small" band
-s      = 3.5 / 5  = 0.70
+W_page = 5.5 * 1.0 = 5.5    → "large" band
+s      = 5.5 / 5   = 1.10
 ```
 
-Target page pt: title=10, label=9, tick=8.
-Floors: all ≥ 6 ✓. Order: 10 ≥ 9 ≥ 8 ✓.
+Typography page pt: title=10, label=8, tick=6 (= body_pt − 4 = 6, at floor). Code pt: 9.0, 7.5, 5.5 — but tick went below 6 on page? No, `6 × 1.10 = 6.6` on page ✓.
 
-Code pt: title=10/0.70≈14.5, label=9/0.70≈13.0, tick=8/0.70≈11.5.
+Strokes (page → code, `/ 1.10`):
+- axes.linewidth: 0.8 → 0.7
+- tick.major.width: 0.8 → 0.7
+- tick.minor.width: 0.5 → 0.5
+- patch.linewidth: 0.8 → 0.7
+- grid.linewidth: 0.5 → 0.5
 
-Line widths: `axes.linewidth = 0.8/0.70 ≈ 1.14`, `xtick.major.width ≈ 1.14`, etc.
+Lengths:
+- tick.major.size: 3.5 → 3.2
+- tick.minor.size: 2.0 → 1.8
+
+Lines (large band):
+- lines.linewidth: 1.5 → 1.4
+- lines.markersize: 5.0 → 4.5
+- errorbar.capsize: 3.0 → 2.7, capthick = axes.linewidth = 0.7
+
+Consistency checks all pass. Bar review: not applicable (line plot).
 
 ## Common mistakes to avoid
 
-- Scaling the user's existing fontsize values (`new = old * k`) — never do this; always recompute from absolute target.
-- Changing `figsize` — the user owns this.
-- Using the same hierarchy (e.g., 12/10/8) regardless of figure size — compresses badly on small figures.
-- Forgetting to also scale line/tick widths — large text with hairline axes looks broken.
-- Leaving stale explicit `fontsize=` kwargs in the script that will override your `rcParams`.
+- Scaling user-existing values instead of deriving from scratch.
+- Updating fonts but leaving `lines.linewidth`, `markersize`, `axes.linewidth` at defaults — creates visual imbalance.
+- Changing `figsize`.
+- Touching `color`, `cmap`, `linestyle`, `marker` glyphs, `alpha` — these are semantic.
+- Treating bar `width=` like a line width (it's data-coord, different rule).
+- Forgetting `capthick` for errorbars (not in rcParams; must be set per-call).
+- Forgetting to remove stale `fontsize=` / `linewidth=` kwargs that will override your rcParams.
+- Scaling scatter `s=` when it's a per-point data-encoding array.
