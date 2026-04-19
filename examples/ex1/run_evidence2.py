@@ -159,11 +159,51 @@ def _plot_pareto_swd(normal_step, icae_step, normal_line, icae_line,
     configure_matplotlib_for_env()
     import matplotlib.pyplot as plt
 
+    plt.rcParams.update({
+        # --- Typography ---
+        "font.size":             10,
+        "axes.titlesize":        8,
+        "figure.titlesize":      8,
+        "axes.labelsize":        7,
+        "xtick.labelsize":       7,
+        "ytick.labelsize":       7,
+        "legend.fontsize":       7,
+        "legend.title_fontsize": 7,
+        # --- Legend layout ---
+        "legend.frameon":        False,
+        "legend.handlelength":   1.2,
+        "legend.handletextpad":  0.4,
+        "legend.columnspacing":  1.0,
+        "legend.borderpad":      0.3,
+        "legend.labelspacing":   0.3,
+        # --- Strokes ---
+        "axes.linewidth":        0.8,
+        "xtick.major.width":     0.8,
+        "ytick.major.width":     0.8,
+        "xtick.minor.width":     0.5,
+        "ytick.minor.width":     0.5,
+        "grid.linewidth":        0.5,
+        "patch.linewidth":       0.8,
+        "hatch.linewidth":       0.8,
+        # --- Lengths ---
+        "xtick.major.size":      3.5,
+        "ytick.major.size":      3.5,
+        "xtick.minor.size":      2.0,
+        "ytick.minor.size":      2.0,
+        "xtick.major.pad":       3.0,
+        "ytick.major.pad":       3.0,
+        "axes.labelpad":         3.5,
+        # --- Lines / markers ---
+        "lines.linewidth":       1.25,
+        "lines.markersize":      4.0,
+        "lines.markeredgewidth": 0.6,
+    })
+
     n = len(normal_step)
     x = np.arange(n)
     bar_width = 0.35
 
-    fig, ax1 = plt.subplots(figsize=(11, 5.5))
+    fig, ax1 = plt.subplots(figsize=(3.25, 3.25))
 
     # --- Bars: per-transition SWD (left axis, log scale) ---
     ax1.bar(
@@ -175,31 +215,29 @@ def _plot_pareto_swd(normal_step, icae_step, normal_line, icae_line,
         color="#e76f51", alpha=0.55, label=f"ICAE ({bar_suffix})",
     )
     ax1.set_yscale("log")
-    ax1.set_xlabel("Layer Transition", fontsize=14)
-    ax1.set_ylabel("Per-Transition SWD (log)", fontsize=13)
+    ax1.set_xlabel("Layer Transition")
+    ax1.set_ylabel("Per-Transition SWD (log)")
     ax1.set_xticks(x)
-    ax1.set_xticklabels(x_labels, fontsize=10, rotation=45)
-    ax1.tick_params(axis="y", labelsize=11)
+    ax1.set_xticklabels(x_labels, rotation=45)
 
     # --- Lines: second SWD measure (right axis) ---
     ax2 = ax1.twinx()
     ax2.plot(
-        x, normal_line, color="#264653", linewidth=2.5,
-        marker="o", markersize=7, label=f"Normal ({line_suffix})",
+        x, normal_line, color="#264653",
+        marker="o", label=f"Normal ({line_suffix})",
     )
     ax2.plot(
-        x, icae_line, color="#c1440e", linewidth=2.5,
-        marker="s", markersize=7, label=f"ICAE ({line_suffix})",
+        x, icae_line, color="#c1440e",
+        marker="s", label=f"ICAE ({line_suffix})",
     )
-    ax2.set_ylabel(line_ylabel, fontsize=13)
-    ax2.tick_params(axis="y", labelsize=11)
+    ax2.set_ylabel(line_ylabel)
 
     # --- Combined legend ---
     h1, l1 = ax1.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
-    ax1.legend(h1 + h2, l1 + l2, fontsize=11, loc="upper left")
+    ax1.legend(h1 + h2, l1 + l2, loc="upper left")
 
-    ax1.set_title(title, fontsize=14)
+    ax1.set_title(title)
     ax1.grid(True, linestyle="--", alpha=0.25, which="both")
     fig.tight_layout()
 
