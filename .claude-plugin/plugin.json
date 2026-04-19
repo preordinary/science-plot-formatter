@@ -1,0 +1,11 @@
+{
+  "name": "science-plot-formatter",
+  "version": "0.1.0",
+  "description": "Format matplotlib font sizes and aspect ratios for scientific publications",
+  "author": {
+    "name": "Yizhen",
+    "email": "yzhenyao.cs@gmail.com"
+  },
+  "keywords": ["matplotlib", "scientific-plot", "paper", "formatting", "font-size"],
+  "skills": "./skills/"
+}
