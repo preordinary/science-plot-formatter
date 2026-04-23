@@ -32,7 +32,7 @@ Data, colors, colormaps, linestyles, axis limits, and the user's composition are
 |---|---|
 | `script_path` | `/path/to/plot.py` |
 | `venue` | `NeurIPS 2026`, `Nature Communications`, `ICML 2026` |
-| `fraction` | `0.5` (half column), `1.0` (one column), `2.0` (full textwidth) |
+| `fraction` | `0.5` (half column), `1.0` (one column), `2.0` (double columns) |
 
 You do not need to supply column widths or body font sizes — the skill looks them up from the venue.
 
