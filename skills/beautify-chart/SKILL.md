@@ -13,11 +13,7 @@ Collect from the user (ask only for what is missing):
 
 1. `script_path` — absolute path to the matplotlib `.py` script.
 2. `venue` — target conference or journal (e.g. "NeurIPS 2026", "Nature Communications", "ICML 2026").
-3. `fraction` — the figure's fraction of column width, as used on the page:
-   - `0.5` → half a column
-   - `1.0` → one full column (single-column width)
-   - `2.0` → full textwidth (both columns)
-   - values in between are allowed (e.g. `1.5`).
+3. `fraction` — the figure's fraction of column width, as used on the page.
 
 Do **not** ask the user for raw numbers like `column_width_in` or `body_pt`. Derive those from the venue.
 
@@ -43,17 +39,8 @@ Record the retrieved values in chat so the user can sanity-check them.
 
 **Hard rule: no code edit is allowed until the baseline image has been produced and read.**
 
-1. Read the script. Find where/how it saves the figure (`plt.savefig(...)`, `fig.savefig(...)`) or whether it only calls `plt.show()`.
-2. If the script already saves to a known path, use that path for the baseline.
-3. If it only calls `plt.show()`:
-   - Ask the user to confirm adding a minimal `plt.savefig("before.png", dpi=200, bbox_inches="tight")` at the end (this is pre-edit instrumentation, not a visual change).
-   - Prefer saving next to the script, in a subdir like `<script_dir>/_beautify/before.png`.
-4. Run the script headlessly via `Bash`:
-   ```
-   MPLBACKEND=Agg python <script_path>
-   ```
-   Use the script's own working directory. Do not alter its data loading.
-5. Use the `Read` tool on the produced PNG to actually see the figure. Do not skip this — you must look at the pixels.
+Use the script's own working directory. Do not alter its data loading.
+Use the `Read` tool on the produced PNG to actually see the figure. Do not skip this — you must look at the pixels.
 
 If the script fails to run, fix only the minimum needed to produce the baseline (e.g. a missing output directory). Never silently "fix" plot style during this phase.
 
@@ -118,37 +105,18 @@ Use `Edit` (not `Write`) to modify the user's script in place:
 
 **Hard rule: no success claim is allowed until the re-rendered image has been produced and read.**
 
-1. If the baseline was saved to `before.png`, save the new render to `after.png` in the same directory. If the script's own `savefig` path is reused, keep a copy of the before render in `_beautify/before.png` so both exist.
-2. Re-run the script:
-   ```
-   MPLBACKEND=Agg python <script_path>
-   ```
-3. `Read` the new PNG.
-4. **Measure edge padding in pixels — do not rely on visual judgement.** Visual inspection of a rendered thumbnail misses 1–3 pixel clipping of rotated text, long twin-axis labels, and descenders. Run this check on every output PNG:
-   ```python
-   from PIL import Image
-   import numpy as np
-   im = np.array(Image.open(path).convert("L"))
-   h, w = im.shape
-   col = (im < 200).any(axis=0); row = (im < 200).any(axis=1)
-   top   = int(np.where(row)[0].min())
-   bot   = h - 1 - int(np.where(row)[0].max())
-   left  = int(np.where(col)[0].min())
-   right = w - 1 - int(np.where(col)[0].max())
-   print(f"{path}: {w}x{h}px | pad top={top} bot={bot} left={left} right={right}")
-   ```
-   At dpi=300, **any side with <10 px of white border is clipped or about to clip** (rotated descenders, emoji, superscripts, `ℓ`, parens often extend farther than tight-bbox predicts). Treat top=0 as a hard failure even if the image "looks fine."
-5. Walk through each item in the Phase 3 issue list and mark it **resolved**, **partial**, or **still present**, with a one-line justification tied to what you see in the new image.
-6. Scan for regressions the edits could have introduced:
+1. **Measure edge padding in pixels — do not rely on visual judgement.** Visual inspection of a rendered thumbnail misses 1–3 pixel clipping of rotated text, long twin-axis labels, and descenders.
+2. Walk through each item in the Phase 3 issue list and mark it **resolved**, **partial**, or **still present**, with a one-line justification tied to what you see in the new image.
+3. **Scan for regressions the edits could have introduced:**
    - Clipping (title cut off, rotated twin-axis y-label overshooting the top, legend pushed outside axes by new figsize). The pixel-pad check above catches most of these deterministically.
    - Over-thickened data lines that swamp small markers.
    - New overlaps from smaller figure width.
    - Legend now larger than data region.
-7. **Common failures and fixes:**
+4. **Common failures and fixes:**
    - *top=0 or bot=0 px* — a rotated text artist extends beyond figure canvas. Fix: switch `layout="constrained"` → `fig.tight_layout(pad=0.5)`, and/or add `"savefig.pad_inches": 0.15` to rcParams. If the offender is a *long* twin-axis y-label (common with `ax.twinx()` + descriptive ylabel), the real fix is a taller figsize: relax the strict chart-type aspect and make the figure ~10–20% taller so the rotated label fits.
    - *Title feels oversized relative to panel height* — drop `axes.titlesize` to match or slightly below `axes.labelsize` (e.g. 7.5 when labels are 8) and reduce `axes.titlepad` to 1.5–2.0. For column-width figures the LaTeX caption does most of the labeling work; an on-figure title only needs to name the data, not lead the visual hierarchy.
-   - *Legend dominates data region on small figsize* — **keep it inside the axes**, shrink it visually. In order of preference: drop `legend.fontsize` by 1–2pt (usually body_pt−4 to body_pt−5 is fine at column width), add `ncol=2` or `ncol=3` per-call, shrink `legend.handlelength` to 0.8, tighten `legend.labelspacing` to 0.2, `legend.borderpad` to 0.2, `legend.handletextpad` to 0.25, `legend.columnspacing` to 0.8. Try a different in-axes `loc=` if one quadrant of the plot is empty. Only after *all* of these are exhausted — and the legend font would otherwise drop below ~5pt on the printed page — move it outside the axes with `bbox_to_anchor=(0.5, -0.3)` or similar, and budget extra figsize margin. A readable-but-tiny in-axes legend is almost always preferred over an outside legend.
-8. If any Phase 3 issue is still present, or a regression was introduced, go back to Phase 4 with a targeted adjustment, edit, and re-render. Cap at 2–3 iterations before checking in with the user — do not loop silently.
+   - *Legend dominates data region on small figsize* — **keep it inside the axes**, shrink it visually. In order of preference: drop `legend.fontsize` by 1–2pt (usually body_pt−4 to body_pt−5 is fine at column width), add `ncol=2` or `ncol=3` per-call, shrink `legend.handlelength` to 0.8, tighten `legend.labelspacing` to 0.2, `legend.borderpad` to 0.2, `legend.handletextpad` to 0.25, `legend.columnspacing` to 0.8. Only after *all* of these are exhausted — and the legend font would otherwise drop below ~5pt on the printed page — move it outside the axes with `bbox_to_anchor=(0.5, -0.3)` or similar, and budget extra figsize margin. A readable-but-tiny in-axes legend is almost always preferred over an outside legend.
+5. If any Phase 3 issue is still present, or a regression was introduced, go back to Phase 4 with a targeted adjustment, edit, and re-render. Cap at 2–3 iterations before checking in with the user — do not loop silently.
 
 ## Phase 7 — Output
 
