@@ -7,7 +7,6 @@ env/
 .ipynb_checkpoints/
 .DS_Store
 *.pdf
-*.png
 *.svg
 *.eps
 !docs/**/*.pdf
