@@ -96,6 +96,7 @@ From `venue`, `W_page`, `body_pt`, chart type, and the Phase 3 issues, decide th
 - **Data elements** — `lines.linewidth`, `lines.markersize`, `lines.markeredgewidth`. Data lines should be visibly thicker than axis spines. Markers must be ≥ ~3× line width to read as points, not thickenings.
 - **Errorbars** — set `capsize` and `capthick` explicitly on each `errorbar(...)` call (capthick is not in rcParams).
 - **Legend** — `legend.frameon`, `legend.handlelength`, `legend.handletextpad`, `legend.columnspacing`, `legend.labelspacing`, `legend.borderpad`, `legend.fontsize`.
+- **Legend placement — default is INSIDE the axes.** Keep whatever `loc=` the user picked (usually `"upper left"`, `"best"`, etc.) and tighten the legend visually (smaller `legend.fontsize`, `ncol=2`, shorter handles, tighter padding) before ever considering placing it outside the axes. Moving a legend outside the axes (`bbox_to_anchor=(0.5, -0.3)`, `loc="center left", bbox_to_anchor=(1.02, 0.5)`, etc.) is a structural layout change — it shifts margins, competes with twin-axis labels, and permanently consumes figure real estate even when data density later increases. Only move the legend outside when *all* of: (a) the legend still covers ≥ ~40% of the data region after in-axes shrinking, *and* (b) reducing `legend.fontsize` further would drop it below ~5pt on the printed page, *and* (c) there is no empty quadrant of the plot the legend could relocate to with `loc=` alone. Put differently: small font is acceptable; legend floating outside the axes is a last resort. Same reasoning for the on-figure title — don't convert `ax.set_title(...)` into a `fig.suptitle(...)` or an above-axes anchored legend as a space-saving shortcut.
 - **Tick geometry** — `xtick.major.size`, `xtick.minor.size`, `ytick.major.size`, `ytick.minor.size`, `xtick.major.pad`, `ytick.major.pad`, `axes.labelpad`, `axes.titlepad`.
 - **Font family** — respect the venue's mandate if there is one; otherwise leave the user's choice alone.
 
@@ -146,7 +147,7 @@ Use `Edit` (not `Write`) to modify the user's script in place:
 7. **Common failures and fixes:**
    - *top=0 or bot=0 px* — a rotated text artist extends beyond figure canvas. Fix: switch `layout="constrained"` → `fig.tight_layout(pad=0.5)`, and/or add `"savefig.pad_inches": 0.15` to rcParams. If the offender is a *long* twin-axis y-label (common with `ax.twinx()` + descriptive ylabel), the real fix is a taller figsize: relax the strict chart-type aspect and make the figure ~10–20% taller so the rotated label fits.
    - *Title feels oversized relative to panel height* — drop `axes.titlesize` to match or slightly below `axes.labelsize` (e.g. 7.5 when labels are 8) and reduce `axes.titlepad` to 1.5–2.0. For column-width figures the LaTeX caption does most of the labeling work; an on-figure title only needs to name the data, not lead the visual hierarchy.
-   - *Legend dominates data region on small figsize* — add `ncol=2` per-call, shrink `legend.handlelength` to 0.8, tighten `legend.labelspacing` to 0.2 and `legend.borderpad` to 0.2. If still too large, move the legend below the plot with `loc="upper center", bbox_to_anchor=(0.5, -0.3)` and budget extra bottom margin.
+   - *Legend dominates data region on small figsize* — **keep it inside the axes**, shrink it visually. In order of preference: drop `legend.fontsize` by 1–2pt (usually body_pt−4 to body_pt−5 is fine at column width), add `ncol=2` or `ncol=3` per-call, shrink `legend.handlelength` to 0.8, tighten `legend.labelspacing` to 0.2, `legend.borderpad` to 0.2, `legend.handletextpad` to 0.25, `legend.columnspacing` to 0.8. Try a different in-axes `loc=` if one quadrant of the plot is empty. Only after *all* of these are exhausted — and the legend font would otherwise drop below ~5pt on the printed page — move it outside the axes with `bbox_to_anchor=(0.5, -0.3)` or similar, and budget extra figsize margin. A readable-but-tiny in-axes legend is almost always preferred over an outside legend.
 8. If any Phase 3 issue is still present, or a regression was introduced, go back to Phase 4 with a targeted adjustment, edit, and re-render. Cap at 2–3 iterations before checking in with the user — do not loop silently.
 
 ## Phase 7 — Output
@@ -158,8 +159,6 @@ Summarise for the user:
 - Table of key visual-system changes (figsize, fonts, linewidths, markersize, capsize/capthick, legend, ticks) — before vs after.
 - The Phase 3 issue list with resolution status after Phase 6.
 - Absolute paths to both `before.png` and `after.png`.
-
-Then, per the project `CLAUDE.md`, commit the changes to the user's script with a senior-level message.
 
 ## What this skill will not do
 
