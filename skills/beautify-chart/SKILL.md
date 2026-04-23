@@ -122,13 +122,31 @@ Use `Edit` (not `Write`) to modify the user's script in place:
    MPLBACKEND=Agg python <script_path>
    ```
 3. `Read` the new PNG.
-4. Walk through each item in the Phase 3 issue list and mark it **resolved**, **partial**, or **still present**, with a one-line justification tied to what you see in the new image.
-5. Scan for regressions the edits could have introduced:
-   - Clipping (title cut off, legend pushed outside axes by new figsize).
+4. **Measure edge padding in pixels — do not rely on visual judgement.** Visual inspection of a rendered thumbnail misses 1–3 pixel clipping of rotated text, long twin-axis labels, and descenders. Run this check on every output PNG:
+   ```python
+   from PIL import Image
+   import numpy as np
+   im = np.array(Image.open(path).convert("L"))
+   h, w = im.shape
+   col = (im < 200).any(axis=0); row = (im < 200).any(axis=1)
+   top   = int(np.where(row)[0].min())
+   bot   = h - 1 - int(np.where(row)[0].max())
+   left  = int(np.where(col)[0].min())
+   right = w - 1 - int(np.where(col)[0].max())
+   print(f"{path}: {w}x{h}px | pad top={top} bot={bot} left={left} right={right}")
+   ```
+   At dpi=300, **any side with <10 px of white border is clipped or about to clip** (rotated descenders, emoji, superscripts, `ℓ`, parens often extend farther than tight-bbox predicts). Treat top=0 as a hard failure even if the image "looks fine."
+5. Walk through each item in the Phase 3 issue list and mark it **resolved**, **partial**, or **still present**, with a one-line justification tied to what you see in the new image.
+6. Scan for regressions the edits could have introduced:
+   - Clipping (title cut off, rotated twin-axis y-label overshooting the top, legend pushed outside axes by new figsize). The pixel-pad check above catches most of these deterministically.
    - Over-thickened data lines that swamp small markers.
    - New overlaps from smaller figure width.
    - Legend now larger than data region.
-6. If any Phase 3 issue is still present, or a regression was introduced, go back to Phase 4 with a targeted adjustment, edit, and re-render. Cap at 2–3 iterations before checking in with the user — do not loop silently.
+7. **Common failures and fixes:**
+   - *top=0 or bot=0 px* — a rotated text artist extends beyond figure canvas. Fix: switch `layout="constrained"` → `fig.tight_layout(pad=0.5)`, and/or add `"savefig.pad_inches": 0.15` to rcParams. If the offender is a *long* twin-axis y-label (common with `ax.twinx()` + descriptive ylabel), the real fix is a taller figsize: relax the strict chart-type aspect and make the figure ~10–20% taller so the rotated label fits.
+   - *Title feels oversized relative to panel height* — drop `axes.titlesize` to match or slightly below `axes.labelsize` (e.g. 7.5 when labels are 8) and reduce `axes.titlepad` to 1.5–2.0. For column-width figures the LaTeX caption does most of the labeling work; an on-figure title only needs to name the data, not lead the visual hierarchy.
+   - *Legend dominates data region on small figsize* — add `ncol=2` per-call, shrink `legend.handlelength` to 0.8, tighten `legend.labelspacing` to 0.2 and `legend.borderpad` to 0.2. If still too large, move the legend below the plot with `loc="upper center", bbox_to_anchor=(0.5, -0.3)` and budget extra bottom margin.
+8. If any Phase 3 issue is still present, or a regression was introduced, go back to Phase 4 with a targeted adjustment, edit, and re-render. Cap at 2–3 iterations before checking in with the user — do not loop silently.
 
 ## Phase 7 — Output
 
@@ -153,6 +171,7 @@ Then, per the project `CLAUDE.md`, commit the changes to the user's script with 
 
 - You are about to edit code without having read a rendered PNG. **Stop.** Render first.
 - You are about to report "done" without having read the post-edit PNG. **Stop.** Re-render and look.
+- You are about to report "done" without having run the pixel-pad check from Phase 6. **Stop.** Eyeballing a thumbnail is not sufficient — rotated descenders and long twin-axis labels routinely clip by 1–5 px without looking clipped.
 - Your Phase 3 issue list has zero items. **Stop.** Look again at the page-size preview.
 - The venue lookup failed and you are inventing column widths or body font sizes. **Stop.** Ask the user.
 - You are tempted to tweak colors or data to "make it look better". **Stop.** That is out of scope.
