@@ -40,3 +40,11 @@ You do not need to supply column widths or body font sizes — the skill looks t
 
 - Python with `matplotlib` installed on the machine running Claude Code.
 - The user's script must be runnable end-to-end (data loadable from the script's working directory).
+
+
+## Example
+
+<p align="center">
+  <img src="assets/before.png" width="48%" />
+  <img src="assets/after.png" width="48%" />
+</p>
