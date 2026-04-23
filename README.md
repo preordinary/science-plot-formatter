@@ -1,94 +1,42 @@
 # science-plot-formatter
 
-A Claude Code plugin (skills only) that formats matplotlib plotting scripts for inclusion in scientific papers. It reasons about the figure's **final physical size on the page** and sets font sizes, line widths, and (for the second skill) figsize accordingly — rather than naively scaling the user's current values.
+A Claude Code plugin that beautifies matplotlib scripts for scientific paper submission.
 
-## Two skills
+## What it does
 
-### `paper-font-format`
-Given a plotting script plus the target venue (or paper dimensions), recomputes the **entire visual system** from scratch: fonts, axis spines, tick widths and lengths, plot line thickness, marker sizes, bar/patch edges, grid, error-bar caps. Every quantity is derived from the figure's final physical size on the page, so the figure reads as one coherent design. **Keeps `figsize` unchanged.** Title is anchored to the paper's body font; secondary and tertiary fonts adapt to the figure's final on-page width; stroke weights and marker sizes follow typographic conventions.
+Given an existing `.py` plotting script, a target conference/journal, and the figure's fraction of column width on the page, the plugin renders the chart, inspects it critically, rewrites the visual system (figsize, fonts, linewidths, markers, ticks, legend weight), and re-renders to verify the result. It always renders **before** editing and **again after** editing — no code is rewritten from equations alone.
 
-### `match-reference-style`
-Given a reference script the user has already tuned and a target script to harmonize with it, aligns the **entire visual system** between the two (fonts, strokes, markers, patches, error-bar caps) so both figures read at matching on-page weight, and redesigns the target's `figsize` to fit the intended composed layout (e.g., side-by-side in one column). Respects each chart type's natural aspect ratio (heatmap ≈ 1:1, line plot ≈ 3:2) within ±20 % of the reference's height.
+## Skill
 
-## Installation
+- **`beautify-chart`** — the render → inspect → rewrite → re-render → verify loop. The skill looks up the venue's official author guidelines live (column width, body font size, required font family) and derives the target visual system from the figure's final physical width on the page, not from the current code values.
 
-Three ways to use the skills, from zero-install to packaged:
+## Usage
 
-### 1. Direct reference (zero install, simplest)
+Ask Claude Code something like:
 
-Tell Claude which SKILL.md to follow:
+> Beautify `path/to/plot.py` for NeurIPS 2026. It's one full column wide.
 
-> "Using `skills/paper-font-format/SKILL.md`, format `my_plot.py` assuming Nature single-column (body_pt=7, column_width=3.5, embed_ratio=1.0)."
+The skill will:
 
-Works from anywhere — Claude reads the skill file from disk.
+1. Look up NeurIPS 2026 author guidelines (column width, body pt).
+2. Render the script headlessly (`MPLBACKEND=Agg`) and read the PNG.
+3. List concrete visual issues at the target page width.
+4. Propose a unified `plt.rcParams.update({...})` block plus per-call fixes (errorbar `capsize`/`capthick`, stale kwargs removed).
+5. Apply the edits, re-render, and verify each listed issue is resolved.
 
-### 2. Project-scope skills (recommended for development)
+Data, colors, colormaps, linestyles, axis limits, and the user's composition are never touched.
 
-When run inside this repo, Claude Code auto-loads skills from `.claude/skills/` — which is a symlink to `skills/`. Just run `claude` in the project root and the two skills are immediately callable. Edits to `skills/*/SKILL.md` are picked up on the next turn — no reinstall needed.
+## Inputs
 
-This is project-scope only: it doesn't affect other projects, and any same-named user-level skills in `~/.claude/skills/` take precedence (they override, they don't conflict).
+| Input | Example |
+|---|---|
+| `script_path` | `/path/to/plot.py` |
+| `venue` | `NeurIPS 2026`, `Nature Communications`, `ICML 2026` |
+| `fraction` | `0.5` (half column), `1.0` (one column), `2.0` (full textwidth) |
 
-### 3. Install as a plugin
+You do not need to supply column widths or body font sizes — the skill looks them up from the venue.
 
-Once the skills stabilize, this project can be installed as a Claude Code plugin from its git repo. The `.claude-plugin/plugin.json` manifest is already in place.
+## Requirements
 
-```bash
-# Once published to a marketplace:
-claude plugin install science-plot-formatter@<marketplace>
-```
-
-## Usage examples
-
-Both skills begin by asking **"what venue are you submitting to?"** and look up the current paper size, column width, and body font size from the official author guidelines via web search — you don't need to know those numbers yourself.
-
-### paper-font-format
-```
-Use paper-font-format to format examples/before_paper_format.py.
-I'm submitting to NeurIPS 2025. The figure will occupy the full column width.
-```
-
-Claude will look up NeurIPS 2025 author specs, show you what it found, confirm, then rewrite the script.
-
-### match-reference-style
-```
-Use match-reference-style to align examples/target_lineplot.py with
-examples/reference_heatmap.py. Submitting to Nature Communications;
-both figures will sit side-by-side in one column, reference at half-column.
-```
-
-### Fallback (no venue / offline)
-
-If you can't name a venue or web lookup isn't available, the skill will fall back to asking for `column_width_in` and `body_pt` directly (with a small preset menu to choose from).
-
-## Repository layout
-
-```
-science-plot-formatter/
-├── .claude-plugin/plugin.json        # plugin manifest
-├── .claude/skills -> ../skills       # symlink for project-scope auto-load
-├── skills/
-│   ├── paper-font-format/SKILL.md
-│   └── match-reference-style/SKILL.md
-├── examples/                         # before/after test fixtures
-├── docs/font-scaling-math.md         # human-readable math reference
-└── README.md
-```
-
-## The math, briefly
-
-A figure drawn at `figsize = (w, h)` inches and embedded at on-page width `W_page` is scaled by `s = W_page / w`. A text declared at `X` pt in matplotlib renders as `X * s` pt on the page. So to hit target page pt `T`, the code must set `X = T / s`. Everything else in both skills follows from this plus a readability floor (≥ 6 pt on page) and chart-type aware aspect ratios. Full derivation: `docs/font-scaling-math.md`.
-
-## Design principles
-
-- **Ask for the venue, not for column widths.** Users know what they're submitting to; they don't necessarily know that venue's current `\textwidth`. The skills look it up.
-- **Harmonize the whole visual system, not just fonts.** Changing text alone leaves the figure unbalanced — axis spines, tick widths, plot line thickness, marker size, patch edges, and error-bar caps all scale together so the figure reads as one design at its final page size.
-- **Never scale the user's existing values.** They're usually out of proportion to begin with. Derive absolute targets from paper conventions and figure's page size, then completely overwrite.
-- **Skill 1 treats `figsize` as sacred**; skill 2 redesigns it because the target is being composed with another figure.
-- **Readability floor at 6 pt** on the printed page for every text element — enforced after all computation.
-- **Consistency invariants** are checked before writing: `title ≥ label ≥ tick`, `plot line > axis spine`, `markersize ≥ 3× line width`.
-
-## Non-goals (v0.1)
-
-- No commands, agents, hooks, or MCP servers.
-- No changes to data, colormaps, linestyles, or any other semantic choices in user scripts.
-- No marketplace publication workflow yet.
+- Python with `matplotlib` installed on the machine running Claude Code.
+- The user's script must be runnable end-to-end (data loadable from the script's working directory).
