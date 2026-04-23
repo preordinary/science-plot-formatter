@@ -46,8 +46,8 @@ You do not need to supply column widths or body font sizes — the skill looks t
 
 <table align="center">
   <tr>
-    <td align="center"><img src="assets/before.png" width="100%" /></td>
-    <td align="center"><img src="assets/after.png" width="100%" /></td>
+    <td align="center" width="50%"><img src="assets/before.png" width="100%" /></td>
+    <td align="center" width="50%"><img src="assets/after.png" width="100%" /></td>
   </tr>
   <tr>
     <td align="center"><b>Before</b></td>
